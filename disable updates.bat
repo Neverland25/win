@@ -1,22 +1,32 @@
-:: Author: tsgrgo
-:: Completely disable Windows Update
-:: PsExec is required to get system privileges - it should be in this directory
+@echo off
+:: Minimize self if cmdow is present (optional, suppresses UI early)
+:: Uncomment the next line if you have cmdow.exe in the same directory
+:: cmdow @ /MIN
 
-if not "%1"=="admin" (powershell start -verb runas '%0' admin & exit /b)
-if not "%2"=="system" (powershell . '%~dp0\PsExec.exe' /accepteula -i -s -d '%0' admin system & exit /b)
+:: Auto elevate to Admin
+if not "%1"=="admin" (
+    powershell -WindowStyle Hidden -Command "Start-Process '%~f0' -ArgumentList 'admin' -Verb RunAs"
+    exit /b
+)
+
+:: Auto elevate to SYSTEM
+if not "%2"=="system" (
+    powershell -WindowStyle Hidden -Command "Start-Process '%~dp0\PsExec.exe' -ArgumentList '/accepteula -i -s -d \"%~f0\" admin system' -Verb RunAs"
+    exit /b
+)
 
 :: Disable update related services
 for %%i in (wuauserv, UsoSvc, uhssvc, WaaSMedicSvc) do (
-	net stop %%i
-	sc config %%i start= disabled
-	sc failure %%i reset= 0 actions= ""
+    net stop %%i
+    sc config %%i start= disabled
+    sc failure %%i reset= 0 actions= ""
 )
 
 :: Brute force rename services
 for %%i in (WaaSMedicSvc, wuaueng) do (
-	takeown /f C:\Windows\System32\%%i.dll && icacls C:\Windows\System32\%%i.dll /grant *S-1-1-0:F
-	rename C:\Windows\System32\%%i.dll %%i_BAK.dll
-	icacls C:\Windows\System32\%%i_BAK.dll /setowner "NT SERVICE\TrustedInstaller" && icacls C:\Windows\System32\%%i_BAK.dll /remove *S-1-1-0
+    takeown /f C:\Windows\System32\%%i.dll && icacls C:\Windows\System32\%%i.dll /grant *S-1-1-0:F
+    rename C:\Windows\System32\%%i.dll %%i_BAK.dll
+    icacls C:\Windows\System32\%%i_BAK.dll /setowner "NT SERVICE\TrustedInstaller" && icacls C:\Windows\System32\%%i_BAK.dll /remove *S-1-1-0
 )
 
 :: Update registry
@@ -28,7 +38,9 @@ reg add "HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpd
 erase /f /s /q c:\windows\softwaredistribution\*.* && rmdir /s /q c:\windows\softwaredistribution
 
 :: Disable all update related scheduled tasks
-powershell -command "Get-ScheduledTask -TaskPath '\Microsoft\Windows\InstallService\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\UpdateOrchestrator\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\UpdateAssistant\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\WaaSMedic\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\WindowsUpdate\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\WindowsUpdate\*' | Disable-ScheduledTask"
+powershell -WindowStyle Hidden -Command "Get-ScheduledTask -TaskPath '\Microsoft\Windows\InstallService\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\UpdateOrchestrator\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\UpdateAssistant\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\WaaSMedic\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\Windows\WindowsUpdate\*' | Disable-ScheduledTask; Get-ScheduledTask -TaskPath '\Microsoft\WindowsUpdate\*' | Disable-ScheduledTask"
 
-echo Finished
-pause
+:: Done - exit silently
+echo Finished.
+timeout /t 1 >nul
+exit
